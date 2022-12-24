@@ -89,6 +89,8 @@ public class ExternalPayloadStorageUtils {
      *     per {@link ConductorProperties}
      */
     public <T> void verifyAndUpload(T entity, PayloadType payloadType) {
+        if (!shouldUpload(entity, payloadType)) return;
+
         long threshold = 0L;
         long maxThreshold = 0L;
         Map<String, Object> payload = new HashMap<>();
@@ -188,7 +190,7 @@ public class ExternalPayloadStorageUtils {
                         break;
                 }
             }
-        } catch (TransientException te) {
+        } catch (TransientException | TerminateWorkflowException te) {
             throw te;
         } catch (Exception e) {
             LOGGER.error(
@@ -219,7 +221,6 @@ public class ExternalPayloadStorageUtils {
         } else {
             task.setOutputData(new HashMap<>());
         }
-        throw new TerminateWorkflowException(errorMsg, WorkflowModel.Status.FAILED, task);
     }
 
     @VisibleForTesting
@@ -231,5 +232,24 @@ public class ExternalPayloadStorageUtils {
             workflow.setOutput(new HashMap<>());
         }
         throw new TerminateWorkflowException(errorMsg);
+    }
+
+    @VisibleForTesting
+    <T> boolean shouldUpload(T entity, PayloadType payloadType) {
+        if (entity instanceof TaskModel) {
+            TaskModel taskModel = (TaskModel) entity;
+            if (payloadType == PayloadType.TASK_INPUT) {
+                return !taskModel.getRawInputData().isEmpty();
+            } else {
+                return !taskModel.getRawOutputData().isEmpty();
+            }
+        } else {
+            WorkflowModel workflowModel = (WorkflowModel) entity;
+            if (payloadType == PayloadType.WORKFLOW_INPUT) {
+                return !workflowModel.getRawInput().isEmpty();
+            } else {
+                return !workflowModel.getRawOutput().isEmpty();
+            }
+        }
     }
 }
